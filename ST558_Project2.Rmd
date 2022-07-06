@@ -1,30 +1,49 @@
 ---
-title: "Untitled"
-author: "Lan Lin"
+title: "ST558 Project 2: Creating predictive models and automating Markdown reports."
+author: "Josh Baber & Lan Lin"
 date: '2022-07-06'
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'F:\\Graduate\\NCSU_courses\\ST558\\projects\\Project_2\\OnlineNewsPopularity')
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r, include=FALSE}
+library(tidyverse)
+library(reader)
+library(corrplot)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Read in the data set
+```{r}
+# Read in the data set and remove the non-predictive variables 
+shares_Data <- read_csv("OnlineNewsPopularity.csv")[-2:-1]
+head(shares_Data)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Convert the dummy variables of channels to single categorical variable
+```{r}
+# create a single variable representing the data channel
+channel <- factor(cbind(VALUE = factor(max.col(shares_Data[12:17]), ordered = TRUE)))
+levels(channel) <- c( 'Lifestyle', 'Entertainment', 'Business', 'Social Media', 'Tech', 'World')
+
+# Create a new data set using the single variable representing the data channel
+shares_Data_chl <- shares_Data %>% select(-starts_with("data_channel")) %>% 
+                     mutate(channel) %>% 
+                     select(channel, everything())
+```
+
+Subset the data to work on the "Lifestyle" data channel 
+```{r}
+shares_Lifestyle <- shares_Data_chl %>% filter(channel == "Lifestyle")
+```
+
+```{r}
+Correlation <- cor(shares_Lifestyle[-1], method = "spearman")
+
+corrplot(Correlation, type = "upper", tl.pos = "lt")
+corrplot(Correlation, type = "lower", method = "number", add = TRUE, diag = FALSE, tl.pos = "n")
+```
+
