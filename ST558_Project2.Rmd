@@ -7,14 +7,29 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_knit$set(root.dir = 'F:\\Graduate\\NCSU_courses\\ST558\\projects\\Project_2\\OnlineNewsPopularity')
+# Set seed
+set.seed(558)
 ```
 
+## Introduction
+
+This report will be analyzing and fitting models on the [Online News Popularity Data Set](https://archive.ics.uci.edu/ml/datasets/Online+News+Popularity) from UC Irvine's machine learning repository.  This data looks at nearly 60 variables and tries to predict the number of shares that an article will get.  We will be performing some basic exploratory data analysis with tables and graphs, then will fit some models on the data to try to predict the number of shares an article gets.  We subset the number of predictors to about 30.  Many of the predictors in the data set are indicator variables, which indicate things like day of the week or data channel.  Other important predictors include article word count, number of videos or images or links in the article, the rate of positive or negative words, and more.  When fitting the models, we split the data 70/30 into training and testing sets, respectively.  We will be fitting four models on the training data: two linear regression models, a random forest model, and a boosted tree model.  At the end, we will be comparing the root mean square error (RMSE) of each model on the testing set and decide which one performed the best.  
+
+These are the packages we are going to be using.  
+
 ```{r, include=FALSE}
+# Read in packages
 library(tidyverse)
 library(reader)
 library(corrplot)
+library(caret)
+library(elasticnet)
+library(ggridges)
+library(gridExtra)
 ```
 
+
+## Read In Data and Prepare It For EDA  
 
 Read in the data set
 ```{r}
@@ -27,6 +42,7 @@ Convert the dummy variables of channels to single categorical variable
 ```{r}
 # create a single variable representing the data channel
 channel <- factor(cbind(VALUE = factor(max.col(shares_Data[12:17]), ordered = TRUE)))
+# Set the levels of the channel variable
 levels(channel) <- c( 'Lifestyle', 'Entertainment', 'Business', 'Social Media', 'Tech', 'World')
 
 # Create a new data set using the single variable representing the data channel
@@ -40,14 +56,368 @@ Subset the data to work on the "Lifestyle" data channel
 shares_Lifestyle <- shares_Data_chl %>% filter(channel == "Lifestyle")
 ```
 
+Subset the data set to contain only the columns/variables we will be using.  
 ```{r}
-names(shares_Lifestyle)[c(2:4, 9:11, 15, 18, 21, 24:31, 38:41, 44, 47, 50:54)]
+# These are the column numbers of the variables we will be using
+varcols <- c(2:4, 7, 9:11, 15, 18, 21, 24:32, 38:41, 44, 47, 50:54)
+names(shares_Lifestyle)[varcols]
+```
+
+## Create Testing and Training Data Sets 
+
+We randomly divide up the data in 70% training data and 30% testing data using `createDataPartition()`.  
+```{r}
+# Subset lifestyles table into relevant columns
+shares_Lifestyle <- shares_Lifestyle[,varcols]
+# Split into testing and training
+trainIndices <- createDataPartition(shares_Lifestyle$shares, p = 0.7, list = FALSE)
+# Create training set from indices
+lifestyleTrain <- shares_Lifestyle[trainIndices,]
+# Create testing set from remaining indices
+lifestyleTest <- shares_Lifestyle[-trainIndices,]
 ```
 
 
-```{r, fig.height= 12, fig.width = 18}
-Correlation <- cor(shares_Lifestyle[c(2:4, 9:11, 15, 18, 21, 24:31, 38:41, 44, 47, 50:54)], method = "spearman")
+## Exploratory Data Analysis  
 
+First, we made a summary statics of the response variable shares using `summary()`.
+
+```{r}
+summary(lifestyleTrain$shares)
+```
+
+We can create a boxplot of number of shares to see how they are distributed using `geom_boxplot()`.  
+
+```{r}
+ggplot(lifestyleTrain, aes(x = shares)) + geom_boxplot() + labs(title = "Boxplot of Shares") + 
+  xlab("Number of Shares")
+```
+
+
+Since there are some pretty large outliers in the number of shares, we can create a boxplot to "zoom in" on it to see how the majority of the data is dispersed.  To do this, we use the `scale_x_continous()` function and set the limits to be the minimum share count on the low end and twice the IQR on the high end.  We also say `outlier.shape = NA` to remove outlier points.  
+
+```{r}
+# Same code as above to create but with outlier.shape = NA and
+# scale_x_continous to scale the plot down
+ggplot(lifestyleTrain, aes(x = shares)) + geom_boxplot(outlier.shape = NA) +
+  scale_x_continuous(limits = c(min(lifestyleTrain$shares), 2*IQR(lifestyleTrain$shares))) + 
+  labs(title = "Boxplot of Shares (Outliers Removed)") + xlab("Number of Shares")
+```
+
+
+Then, we look at how the response variable shares differs across different groupings within the data. 
+
+First, we create a visual of the correlations using `corrplot()`. 
+```{r, fig.height= 9, fig.width = 11}
+# Add value of correlation to plot
+Correlation <- cor(lifestyleTrain, method = "spearman")
+
+# Create a visual of the correlations
 corrplot(Correlation, type = "upper", tl.pos = "lt")
 corrplot(Correlation, type = "lower", method = "number", add = TRUE, diag = FALSE, tl.pos = "n")
 ```
+
+Then, we look at how the response variable shares differs across weekdays. 
+
+Similar to how we created the "channel" variable earlier, we can create a "day" variable from the "weekday_is_*" dummy variables.  Next, we can create a new data set that has this column, and `group_by()` day to see some summary statistics of shares by each day.  Use `summarize()` to find the mean, median, minimum, maximum, and standard deviation of shares for each day of the week.  
+```{r}
+# create a single variable representing the day of the week  
+day <- factor(cbind(VALUE = factor(max.col(lifestyleTrain[12:18]), ordered = TRUE)))
+# Specify a level for each day
+levels(day) <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+
+# Create a new data set using the single variable representing the day
+daily_Shares_Data_Lifestyle <- lifestyleTrain %>% 
+  select(-starts_with("weekday_is")) %>% 
+  mutate(day) %>% 
+  select(day, everything())
+# Get the mean, median, minimum, maximum, and standard deviation
+# of shares for each day
+daily_Shares_Data_Lifestyle %>% 
+  group_by(day) %>%
+  summarize(avgShares = mean(shares), medShares = median(shares), minShares = min(shares), 
+            maxShares = max(shares), sdShares = sd(shares))
+```
+
+Then, we can visualize the distribution of shares by weekday using `geom_density_ridges()`. The grouping variable weekday will be mapped to the y-axis:
+```{r}
+ggplot(daily_Shares_Data_Lifestyle, 
+       aes(x = shares, 
+           y = day)) +
+  geom_density_ridges(aes(fill = day)) + 
+  coord_cartesian(xlim = quantile(shares_Lifestyle$shares, c(0, 0.9))) +
+  theme_ridges() +
+  labs(title = "Distribution of Shares by weekday") +
+  theme(legend.position = "none")
+```
+
+Next, we can make a line graph to visualize how the average number of shares changes by day.  To do this we use create table of the average shares for each day then plot them using `geom_line()` from `ggplot2`.  
+
+```{r}
+# Create table of daily averages
+daily_Means <- daily_Shares_Data_Lifestyle %>% 
+  group_by(day) %>%
+  summarize(avgShares = mean(shares))
+# Create line plot with labels and titles
+ggplot(daily_Means, aes(x = day, y = avgShares)) + 
+  geom_line(aes(group = 1), color = "blue") + geom_point() + 
+  labs(title = "Average Shares Per Day") + 
+  xlab("Day of Week") + ylab("Mean Shares")
+```
+
+Next, we should look at a contingency table that displays the counts of articles produced each day using `table()`.  
+
+```{r}
+# Counts by day
+table(daily_Shares_Data_Lifestyle$day)
+```
+
+We can get a decent idea of the distribution of the number of links, images, and videos in each article using `summarize()`.  
+
+```{r}
+# Get means and standard deviations
+lifestyleTrain %>% 
+  summarize(avgLinks = mean(num_hrefs), sdLinks = sd(num_hrefs), avgImages = mean(num_imgs), 
+            sdImages = sd(num_imgs), avgVideos = mean(num_videos), sdVideos = sd(num_videos))
+```
+
+It may be important to see if the overall length, or word count, of the article affects how many shares it gets. A reader may be discouraged from sharing an article if it is too long, or they may not want to share it if it doesn't contain much information.  We can look at a scatter plot of n_tokens_content vs. shares using `geom_point()` to better get a visualization of this relationship.  
+
+```{r}
+# Create scatter plot of n_tokens_content and number of shares
+ggplot(data = lifestyleTrain, aes(x = n_tokens_content, y = shares)) + 
+  geom_point(aes(col = factor(is_weekend))) + 
+  labs(title = "Word Count and Shares, Colored by Weekend/Weekday") + 
+  xlab("Word Count") + ylab("Number of Shares") + 
+  scale_color_discrete(name = " ", labels = c("Weekday", "Weekend"))
+```
+
+Again, outliers may be an issue, and may make it harder to see the relationships for most of the variables.  To scale down, we can use the `coord_cartesian()` function to subset the amount of plot shown to contain the first 95% of each variable using the `quantile()` function.  
+
+```{r}
+# Subset scatter plot to show the first 95% of the data for each variable
+ggplot(data = lifestyleTrain, aes(x = n_tokens_content, y = shares)) + 
+  geom_point(aes(col = factor(is_weekend))) + 
+  labs(title = " Zoomed In Word Count and Shares, Colored by Weekend/Weekday") + 
+  xlab("Word Count") + ylab("Number of Shares") + 
+  scale_color_discrete(name = " ", labels = c("Weekday", "Weekend")) + 
+  coord_cartesian(xlim = c(0, quantile(lifestyleTrain$n_tokens_content, 0.95)),  
+                  ylim = c(0, quantile(lifestyleTrain$shares, 0.95)))
+```
+
+
+It may be also important to see if the absolute subjectivity level and absolute polarity level of the article title affects how many shares it gets. If the article title is too sentimental, a reader may consider it as un-professional and be discouraged from sharing an article. We can look at a scatter plot of abs_title_subjectivity vs. shares using `geom_point()` to better get a visualization of this relationship, and compare it with a scatter plot of abs_title_sentiment_polarity vs. shares side-by-side. 
+
+```{r, fig.width= 18}
+# Subset scatter plot to show the first 95% of the data for each variable
+plot_title_subjectivity <- ggplot(data = lifestyleTrain, aes(x = abs_title_subjectivity, y = shares)) + 
+                             geom_point(aes(col = factor(is_weekend)),position = "jitter") +
+                             facet_grid(factor(is_weekend) ~.) +
+                             labs(title = "  Absolute subjectivity level of article title by Weekend/Weekday") + 
+                               xlab(" Absolute subjectivity level of article title") + ylab("Number of Shares") + 
+                             scale_color_discrete(name = " ", labels = c("Weekday", "Weekend")) +
+                             coord_cartesian(xlim = c(0, quantile(lifestyleTrain$abs_title_subjectivity, 0.9)),  
+                               ylim = c(0.2, quantile(lifestyleTrain$shares, 0.9)))
+
+plot_title_sentiment_polarity <- ggplot(data = lifestyleTrain, aes(x = abs_title_sentiment_polarity, y = shares)) + 
+                                   geom_point(aes(col = factor(is_weekend)),position = "jitter") +
+                                   facet_grid(factor(is_weekend) ~.) +
+                                   labs(title = " Absolute polarity level of article title by Weekend/Weekday") + 
+                                     xlab("Absolute polarity level of article title") + ylab("Number of Shares") + 
+                                   scale_color_discrete(name = " ", labels = c("Weekday", "Weekend")) +
+                                   coord_cartesian(xlim = c(0, quantile(lifestyleTrain$abs_title_sentiment_polarity, 0.9)),  
+                                     ylim = c(0.2, quantile(lifestyleTrain$shares, 0.9)))
+
+grid.arrange(plot_title_subjectivity, plot_title_sentiment_polarity, nrow=1, ncol=2)
+```
+ 
+We are also interested in how best vs worst keywords affect the average numbers of shares. A reader may be discouraged from sharing an article if its keywords are two negative. We can look at a box plot of type of keywords vs. log(avg.shares) using `geom_boxplot()` to better get a visualization of this relationship.  
+```{r}
+# Create a keywords data set to plot
+keywords <- as_tibble(data.frame(avg.shares = c(lifestyleTrain$kw_avg_min, lifestyleTrain$kw_avg_max), 
+                                  keywords = c(rep("Worst_keyword", nrow(lifestyleTrain)), rep("Best_keyword", nrow(lifestyleTrain))))) 
+
+# Create a box plot
+ggplot(data = keywords, aes(x = keywords, y = log2(avg.shares), fill = keywords)) + 
+  geom_boxplot() +
+  labs(title =  "Log of Average Numbers of Shares by Keyword Type",
+         x = "Keyword Type", y = "Log of Average Numbers of Shares")
+```
+
+
+## Model Fitting  
+
+Now that we have a good idea of how the data is distributed and different variables interact with each other, we can fit models to the data in order to predict the number of shares an article will get based on the predictors we've been using.  First, we are going to fit two linear regression models using LASSO regression and Poisson regression.Then we are going to fit a boosted tree model and a random forest model.  
+
+The linear regression model requires a full rank matrix, so we can't have the dummy variable columns for the days of the week.  So we must keep using the data set that has the "day" column variable.  We should also convert the dummy variables to a "day" column variable for the testing set, so that we can use our model on it.  Also, we need to delete the "is_weekend" indicator variable from both data sets, since it is redundant because we already have the days of the week variable.  
+
+```{r}
+# Remove is_weekend variable and keep day column
+dailyLifestyleTrain <- daily_Shares_Data_Lifestyle %>% select(-is_weekend)
+# Build day variable
+day <- factor(cbind(VALUE = factor(max.col(lifestyleTest[12:18]), ordered = TRUE)))
+# Give day levels
+levels(day) <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+
+# Create a new testing set that has the day variable
+daily_Shares_Test_Lifestyle <- lifestyleTest %>% 
+  select(-starts_with("weekday_is")) %>% 
+  mutate(day) %>% 
+  select(day, everything())
+# Drop the is_weekend variable from the testing set
+dailyLifestyleTest <- daily_Shares_Test_Lifestyle %>% select(-is_weekend)
+```
+
+`The idea of linear regression model:`
+
+- Linear regression attempts to model the relationship between a scalar response and one or more explanatory variables by fitting a linear equation to observed data. The case of one explanatory variable is called simple linear regression; and for more than one, the process is called multiple linear regression.
+
+- Overfitting occurs when a statistical model fits exactly against its training data, but cannot perform accurately against unseen data. This is where shrinkage methods come in play. These methods apply a penalty term to the Loss function used in the model. Minimizing the loss function is equal to maximizing the accuracy. The best-known shrinking methods are Ridge Regression and Lasso Regression which are often used in place of Linear Regression.
+
+- The generalized linear model expands the general linear model so that the dependent variable is linearly related to the factors and covariates via a specified link function. Moreover, the model allows for the dependent variable to have a non-normal distribution. It covers widely used statistical models, such as linear regression for normally distributed responses, logistic models for binary data, poison models for count data etc. 
+
+
+Fit a LASSO trained model using the training data with `train()` and standardize the data with `preProcess()`.  *Insert LASSO regression explanation here*  
+
+```{r}
+# Linear Regression Model using LASSO
+lassoFit <- train(shares ~ ., data = dailyLifestyleTrain, method = "lasso",
+                  preProcess = c("center", "scale"))
+```
+
+Now that we have the model fit, we can see how well it predicts the shares in the test set.  We make our predictions using `predict()` and get the error diagnostics using `postResample()`.  
+
+```{r}
+# Make predictions with linear model
+predslinear <- predict(lassoFit, newdata = dailyLifestyleTest)
+# See how well the model fits
+postResample(predslinear, obs = dailyLifestyleTest$shares)
+```
+
+
+Poisson distribution is useful for modeling counts. So, we fit a poisson trained model using the training data with `train()`, specify ` method = "glm"` and `family = "poisson"`, and standardize the data with `preProcess()`.
+```{r}
+poiFit <- train(shares ~ ., data = dailyLifestyleTrain, method = "glm", 
+                family=poisson(link = "log"),
+                trControl = trainControl(method = "cv", number = 10),
+                preProcess = c("center", "scale"))
+```
+
+
+Now that we have the poisson model fit, we can see how well it predicts the shares in the test set.  We make our predictions using `predict()` and get the error diagnostics using `postResample()`.  
+
+```{r}
+# Make predictions with poisson regression model
+predsPoi <- predict(poiFit, newdata = dailyLifestyleTest)
+# See how well the model fits
+postResample(predsPoi, obs = dailyLifestyleTest$shares)
+```
+
+
+*Insert ensemble model explanation here* 
+
+The next model we fit is a boosted tree model using `train()`.  We need to specify `method = "gbm"` and there are four tuning parameters that we need to select.  *Insert explanation about boosted tree models here and its tuning parameters here*
+
+```{r}
+# Values of n.trees
+nTrees <- c(10, 50, 100, 200)
+# Values of interaction.depth
+intDepth <- c(1, 2, 3, 4)
+# Value of shrinkage
+shrink <- c(0.001, 0.05, 0.1, 0.5)
+# Value of n.minobsinnode
+nodeMinN <- c(5, 10, 15, 20)
+# Fit the boosted tree model on the training data
+lifestyleBoost <- train(shares ~ ., data = lifestyleTrain, method = "gbm",
+                        # Perform 5 fold cross validation repeated 3 times
+                        trControl = trainControl(method = "cv", number = 10),
+                        # Standardize the data, hide output with verborse = FALSE
+                        preProcess = c("center", "scale"), verbose = FALSE,
+                        # Check all possible combinations of n.trees, interaction.depth,
+                        # shrinkage, and n.minobsinnode tuning parameters
+                        tuneGrid = expand.grid(n.trees = nTrees, interaction.depth = intDepth,
+                                               shrinkage = shrink, n.minobsinnode = nodeMinN))
+```
+
+Now we can make predictions and get the model diagnostics using the testing set.  
+
+```{r}
+# Make predictions with boosted model
+predsBoost <- predict(lifestyleBoost, newdata = lifestyleTest)
+# Check model fit diagnostics
+postResample(predsBoost, obs = lifestyleTest$shares)
+```
+
+
+The random forest algorithm is an extension of the bagging method as it utilizes both bagging and feature randomness to create an uncorrelated forest of decision trees. Now, we create a random forest tree model using `train()` and specify `method = "rf"`.
+```{r}
+rfFit <- train(shares ~ ., data = dailyLifestyleTrain, method = "rf",
+               trControl = trainControl(method = "cv", number = 5),
+               preProcess = c("center", "scale"),
+               tuneGrid = data.frame(mtry = 1:5))
+```
+
+Now we can make predictions and get the model diagnostics using the testing set.  
+
+```{r}
+# Make predictions with random forest model
+predsRf <- predict(rfFit, newdata = lifestyleTest)
+# Check model fit diagnostics
+postResample(predsRf, obs = lifestyleTest$shares)
+```
+
+Find the model by finding the RMSE on the test data
+```{r}
+# 
+fit.results <- data.frame(rbind(
+  "Lasso"= postResample(predslinear, lifestyleTest$shares),
+  "Poisson"= postResample(predsPoi, lifestyleTest$shares),
+  "boosted"= postResample(predsBoost, lifestyleTest$shares),
+  "`Random Forest`" = postResample(predsRf,lifestyleTest$shares)
+))
+
+best_model <- row.names(fit.results)[fit.results$RMSE == min(fit.results$RMSE)]
+
+print(paste("The best model by finding the RMSE on the test data is the", best_model, "moeel."))
+```
+
+
+Write a function that finds the best model out of our four models based on the lowest RMSE.  It does the same `predict()` and `postResample()` process as before, but subsets to just the first item, which is the RMSE, for each model.  It then finds the minimum of these and checks if the minimum is equal to the RMSE for each model, and if it is print a message that says that model is the best.  
+
+```{r}
+# Create function that takes in models as inputs
+bestModel <- function(linearmodel, boostedmodel){
+  # Get predictions from the linear model
+  predslinear <- predict(linearmodel, newdata = lifestyleTest)
+  # Get predictions from the boosted tree model
+  predsboost <- predict(boostedmodel, newdata = lifestyleTest)
+  # Grab the RMSE for the linear model
+  RMSElinear <- postResample(predslinear, obs = lifestyleTest$shares)[[1]]
+  # Grab the RMSE for the boosted tree model
+  RMSEboost <- postResample(predsboost, obs = lifestyleTest$shares)[[1]]
+  # Find the minimum RMSE
+  bestRMSE <- min(c(RMSElinear, RMSEboost))
+  # If the RMSE from the linear model is the minimum, say it's the best model
+  if(bestRMSE == RMSElinear){
+    print("The Linear Model Had the Lowest RMSE")
+  }
+  # If the RMSE from the boosted tree model is the minimum, say it's the best model
+  else if(bestRMSE == RMSEboost){
+    print("The Boosted Tree Model Had the Lowest RMSE")
+  }
+}
+```
+
+We can now use this function to find which model is the best fit.  
+
+```{r}
+# Choose best model from the ones submitted
+bestModel(linearmodel = lassoFit, boostedmodel = lifestyleBoost)
+```
+
+
+```{r}
+postResample(c(predsRf, predsBoost), obs = lifestyleTest$shares)
+```
+
+

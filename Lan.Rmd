@@ -1,0 +1,109 @@
+---
+title: "ST558 Project 2: Creating predictive models and automating Markdown reports."
+author: "Josh Baber & Lan Lin"
+date: '2022-07-06'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'F:\\Graduate\\NCSU_courses\\ST558\\projects\\Project_2\\OnlineNewsPopularity')
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(reader)
+library(corrplot)
+library(ggridges)
+library(RColorBrewer)
+library(GGally)
+```
+
+
+Read in the data set
+```{r}
+# Read in the data set and remove the non-predictive variables 
+shares_Data <- read_csv("OnlineNewsPopularity.csv")[-2:-1]
+head(shares_Data)
+```
+
+Convert the dummy variables of channels to single categorical variable
+```{r}
+# create a single variable representing the data channel
+channel <- factor(cbind(VALUE = factor(max.col(shares_Data[12:17]), ordered = TRUE)))
+levels(channel) <- c( 'Lifestyle', 'Entertainment', 'Business', 'Social Media', 'Tech', 'World')
+
+# Create a new data set using the single variable representing the data channel
+shares_Data_chl <- shares_Data %>% select(-starts_with("data_channel")) %>% 
+                     mutate(channel) %>% 
+                     select(channel, everything())
+```
+
+Convert the dummy variables of weekdays to single categorical variable
+```{r}
+# create a single variable representing the data weekdays
+weekday <- factor(cbind(VALUE = factor(max.col(shares_Data_chl[25:31]), ordered = TRUE)))
+levels(weekday) <- c("Monday", 'Tuesday',' Wednesday', 'Thursday',' Friday', 'Saturday', 'Sunday')
+
+# Create a new data set using the single variable representing the data channel
+shares_Data_chl <- shares_Data_chl %>% select(-starts_with("weekday_is")) %>% 
+                     mutate(weekday) %>% 
+                     select(channel, weekday, everything())
+
+shares_Data_chl
+```
+
+```{r}
+names(shares_Data_chl)
+```
+
+Tuesday Wednesday Thursday Friday Saturday Sunday
+
+
+Subset the data to work on the "Lifestyle" data channel 
+```{r}
+shares_Lifestyle <- shares_Data_chl %>% filter(channel == "Lifestyle")
+```
+
+Statistical summary of response variable shares 
+```{r}
+summary(shares_Lifestyle$shares)
+```
+
+Boxplot of shares
+```{r}
+ggplot(shares_Lifestyle, aes(y= shares)) + geom_boxplot(outlier.shape = NA) +
+  coord_cartesian(ylim = quantile(shares_Lifestyle$shares, c(0.1, 0.9)))
+```
+
+Distribution of Shares by weekday using the shares_Lifestyle data set. The grouping variable weekday will be mapped to the y-axis:
+```{r}
+ggplot(shares_Lifestyle, 
+       aes(x = shares, 
+           y = weekday)) +
+  geom_density_ridges(aes(fill = weekday)) + 
+  coord_cartesian(xlim = quantile(shares_Lifestyle$shares, c(0, 0.9))) +
+  theme_ridges() +
+  labs("Highway mileage by auto class") +
+  theme(legend.position = "none")
+```
+
+```{r}
+names(shares_Lifestyle)[c(2:5, 8, 10:12, 16, 19, 22, 25, 32:35, 38, 41, 44:48)]
+```
+
+Data set for modeling 
+```{r}
+Lifestyle <- shares_Lifestyle[c(2:5, 8, 10:12, 16, 19, 22, 25, 32:35, 38, 41, 44:48)]
+Lifestyle
+```
+
+
+```{r}
+Correlation <- cor(shares_Lifestyle[c(3:5, 8, 10:12, 16, 19, 22, 25, 32:35, 38, 41, 44:48)], method = "spearman")
+Correlation
+```
+
+```{r, fig.height= 12, fig.width = 18}
+corrplot(Correlation, type = "upper", tl.pos = "lt")
+corrplot(Correlation, type = "lower", method = "number", add = TRUE, diag = FALSE, tl.pos = "n")
+```
