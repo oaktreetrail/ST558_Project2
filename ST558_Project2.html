@@ -738,71 +738,81 @@ postResample(predsPoi, obs = dailyLifestyleTest$shares)</code></pre>
 there are four tuning parameters that we need to select. <em>Insert
 explanation about boosted tree models here and its tuning parameters
 here</em></p>
-<pre class="r"><code># # Values of n.trees
-# nTrees &lt;- c(10, 50, 100, 200)
-# # Values of interaction.depth
-# intDepth &lt;- c(1, 2, 3, 4)
-# # Value of shrinkage
-# shrink &lt;- c(0.001, 0.05, 0.1, 0.5)
-# # Value of n.minobsinnode
-# nodeMinN &lt;- c(5, 10, 15, 20)
-# # Fit the boosted tree model on the training data
-# lifestyleBoost &lt;- train(shares ~ ., data = lifestyleTrain, method = &quot;gbm&quot;,
-#                         # Perform 5 fold cross validation repeated 3 times
-#                         trControl = trainControl(method = &quot;cv&quot;, number = 10),
-#                         # Standardize the data, hide output with verborse = FALSE
-#                         preProcess = c(&quot;center&quot;, &quot;scale&quot;), verbose = FALSE,
-#                         # Check all possible combinations of n.trees, interaction.depth,
-#                         # shrinkage, and n.minobsinnode tuning parameters
-#                         tuneGrid = expand.grid(n.trees = nTrees, interaction.depth = intDepth,
-#                                                shrinkage = shrink, n.minobsinnode = nodeMinN))
-# ```
-# 
-# Now we can make predictions and get the model diagnostics using the testing set.  
-# 
-# ```{r}
-# # Make predictions with boosted model
-# predsBoost &lt;- predict(lifestyleBoost, newdata = lifestyleTest)
-# # Check model fit diagnostics
-# postResample(predsBoost, obs = lifestyleTest$shares)</code></pre>
+<pre class="r"><code># Parallel Processing
+cl &lt;- makePSOCKcluster(3)
+registerDoParallel(cl)
+
+# Values of n.trees
+nTrees &lt;- c(10, 50, 100, 200)
+# Values of interaction.depth
+intDepth &lt;- c(1, 2, 3, 4)
+# Value of shrinkage
+shrink &lt;- c(0.001, 0.05, 0.1, 0.5)
+# Value of n.minobsinnode
+nodeMinN &lt;- c(5, 10, 15, 20)
+# Fit the boosted tree model on the training data
+lifestyleBoost &lt;- train(shares ~ ., data = lifestyleTrain, method = &quot;gbm&quot;,
+                        # Perform 5 fold cross validation repeated 3 times
+                        trControl = trainControl(method = &quot;cv&quot;, number = 10),
+                        # Standardize the data, hide output with verborse = FALSE
+                        preProcess = c(&quot;center&quot;, &quot;scale&quot;), verbose = FALSE,
+                        # Check all possible combinations of n.trees, interaction.depth,
+                        # shrinkage, and n.minobsinnode tuning parameters
+                        tuneGrid = expand.grid(n.trees = nTrees, interaction.depth = intDepth,
+                                               shrinkage = shrink, n.minobsinnode = nodeMinN))</code></pre>
+<p>Now we can make predictions and get the model diagnostics using the
+testing set.</p>
+<pre class="r"><code># Make predictions with boosted model
+predsBoost &lt;- predict(lifestyleBoost, newdata = lifestyleTest)
+# Check model fit diagnostics
+postResample(predsBoost, obs = lifestyleTest$shares)</code></pre>
+<pre><code>##         RMSE     Rsquared          MAE 
+## 1.223263e+04 1.474695e-03 3.370848e+03</code></pre>
 <p>The random forest algorithm is an extension of the bagging method as
 it utilizes both bagging and feature randomness to create an
 uncorrelated forest of decision trees. Now, we create a random forest
 tree model using <code>train()</code> and specify
 <code>method = &quot;rf&quot;</code>.</p>
-<pre class="r"><code># library(doParallel)
-# library(microbenchmark)
-# 
-# cl &lt;- makePSOCKcluster(3)
-# registerDoParallel(cl)
-# 
-# microbenchmark(
-#   rfFit &lt;- train(shares ~ ., data = dailyLifestyleTrain, method = &quot;rf&quot;,
-#                trControl = trainControl(method = &quot;cv&quot;, number = 5),
-#                preProcess = c(&quot;center&quot;, &quot;scale&quot;),
-#                tuneGrid = data.frame(mtry = 1:5))
-# )
-# stopCluster(cl)</code></pre>
+<pre class="r"><code># Parallel Processing
+rfFit &lt;- train(shares ~ ., data = dailyLifestyleTrain, method = &quot;rf&quot;,
+               trControl = trainControl(method = &quot;cv&quot;, number = 10),
+               preProcess = c(&quot;center&quot;, &quot;scale&quot;),
+               tuneGrid = data.frame(mtry = 1:22))
+
+stopCluster(cl)</code></pre>
 <p>Now we can make predictions and get the model diagnostics using the
 testing set.</p>
-<pre class="r"><code># # Make predictions with random forest model
-# predsRf &lt;- predict(rfFit, newdata = lifestyleTest)
-# # Check model fit diagnostics
-# postResample(predsRf, obs = lifestyleTest$shares)</code></pre>
+<pre class="r"><code># Make predictions with random forest model
+predsRf &lt;- predict(rfFit, newdata = lifestyleTest)
+# Check model fit diagnostics
+postResample(predsRf, obs = lifestyleTest$shares)</code></pre>
+<pre><code>##         RMSE     Rsquared          MAE 
+## 1.221926e+04 3.171650e-03 3.411661e+03</code></pre>
 <p>Find the model by finding the RMSE on the test data</p>
-<pre class="r"><code># 
-# get_bestModel &lt;- function(lasso, poi, boost, rf){
-#   # Put all the fit results in a data frame
-#   fit.results &lt;- data.frame(rbind(&quot;Lasso&quot;= postResample(lasso, lifestyleTest$shares),
-#                                   &quot;Poisson&quot;= postResample(poi, lifestyleTest$shares),
-#                                   &quot;boosted&quot;= postResample(boost, lifestyleTest$shares),
-#                                   &quot;`Random Forest`&quot; = postResample(rf,lifestyleTest$shares)))
-#   # return the row name of the model which has the smallest RMSE
-#   best_model &lt;- row.names(fit.results)[fit.results$RMSE == min(fit.results$RMSE)] 
-#   print(paste(&quot;The best model by finding the RMSE on the test data is the&quot;, best_model, &quot;moeel.&quot;))
-# }
-# 
-# get_bestModel(predslinear, predsPoi, predsBoost, predsRf)</code></pre>
+<pre class="r"><code># Create a function to find the best model 
+get_bestModel &lt;- function(lasso, poi, boost, rf){
+  # Put all the fit results in a data frame
+  fit.results &lt;- data.frame(rbind(&quot;Lasso&quot;= postResample(lasso, lifestyleTest$shares),
+                                  &quot;Poisson&quot;= postResample(poi, lifestyleTest$shares),
+                                  &quot;boosted&quot;= postResample(boost, lifestyleTest$shares),
+                                  &quot;`Random Forest`&quot; = postResample(rf,lifestyleTest$shares)))
+  # return the row name of the model which has the smallest RMSE
+  best_model_name &lt;- row.names(fit.results)[fit.results$RMSE == min(fit.results$RMSE)]
+  return(list(fit.results, best_model_name))
+}</code></pre>
+<p>Print out the results</p>
+<pre class="r"><code># Model compassion 
+best_model &lt;- get_bestModel(predslinear, predsPoi, predsBoost, predsRf)
+
+best_model[[1]]</code></pre>
+<pre><code>##                     RMSE    Rsquared      MAE
+## Lasso           12217.77 0.003812147 3428.810
+## Poisson         12184.95 0.008907943 3435.253
+## boosted         12232.63 0.001474695 3370.848
+## `Random Forest` 12219.26 0.003171650 3411.661</code></pre>
+<pre class="r"><code># Best model 
+print(paste(&quot;The best model by finding the RMSE on the test data is the&quot;, best_model[[2]], &quot;moeel.&quot;))</code></pre>
+<pre><code>## [1] &quot;The best model by finding the RMSE on the test data is the Poisson moeel.&quot;</code></pre>
 <p>Write a function that finds the best model out of our four models
 based on the lowest RMSE. It does the same <code>predict()</code> and
 <code>postResample()</code> process as before, but subsets to just the
@@ -810,30 +820,33 @@ first item, which is the RMSE, for each model. It then finds the minimum
 of these and checks if the minimum is equal to the RMSE for each model,
 and if it is print a message that says that model is the best.</p>
 <pre class="r"><code># Create function that takes in models as inputs
-# bestModel &lt;- function(linearmodel, boostedmodel){
-#   # Get predictions from the linear model
-#   predslinear &lt;- predict(linearmodel, newdata = lifestyleTest)
-#   # Get predictions from the boosted tree model
-#   predsboost &lt;- predict(boostedmodel, newdata = lifestyleTest)
-#   # Grab the RMSE for the linear model
-#   RMSElinear &lt;- postResample(predslinear, obs = lifestyleTest$shares)[[1]]
-#   # Grab the RMSE for the boosted tree model
-#   RMSEboost &lt;- postResample(predsboost, obs = lifestyleTest$shares)[[1]]
-#   # Find the minimum RMSE
-#   bestRMSE &lt;- min(c(RMSElinear, RMSEboost))
-#   # If the RMSE from the linear model is the minimum, say it&#39;s the best model
-#   if(bestRMSE == RMSElinear){
-#     print(&quot;The Linear Model Had the Lowest RMSE&quot;)
-#   }
-#   # If the RMSE from the boosted tree model is the minimum, say it&#39;s the best model
-#   else if(bestRMSE == RMSEboost){
-#     print(&quot;The Boosted Tree Model Had the Lowest RMSE&quot;)
-#   }
-# }</code></pre>
+bestModel &lt;- function(linearmodel, boostedmodel){
+  # Get predictions from the linear model
+  predslinear &lt;- predict(linearmodel, newdata = lifestyleTest)
+  # Get predictions from the boosted tree model
+  predsboost &lt;- predict(boostedmodel, newdata = lifestyleTest)
+  # Grab the RMSE for the linear model
+  RMSElinear &lt;- postResample(predslinear, obs = lifestyleTest$shares)[[1]]
+  # Grab the RMSE for the boosted tree model
+  RMSEboost &lt;- postResample(predsboost, obs = lifestyleTest$shares)[[1]]
+  # Find the minimum RMSE
+  bestRMSE &lt;- min(c(RMSElinear, RMSEboost))
+  # If the RMSE from the linear model is the minimum, say it&#39;s the best model
+  if(bestRMSE == RMSElinear){
+    print(&quot;The Linear Model Had the Lowest RMSE&quot;)
+  }
+  # If the RMSE from the boosted tree model is the minimum, say it&#39;s the best model
+  else if(bestRMSE == RMSEboost){
+    print(&quot;The Boosted Tree Model Had the Lowest RMSE&quot;)
+  }
+}</code></pre>
 <p>We can now use this function to find which model is the best fit.</p>
 <pre class="r"><code># Choose best model from the ones submitted
-#bestModel(linearmodel = lassoFit, boostedmodel = lifestyleBoost)</code></pre>
-<pre class="r"><code>#postResample(c(predsRf, predsBoost), obs = lifestyleTest$shares)</code></pre>
+bestModel(linearmodel = lassoFit, boostedmodel = lifestyleBoost)</code></pre>
+<pre><code>## [1] &quot;The Linear Model Had the Lowest RMSE&quot;</code></pre>
+<pre class="r"><code>postResample(c(predsRf, predsBoost), obs = lifestyleTest$shares)</code></pre>
+<pre><code>##       RMSE   Rsquared        MAE 
+##         NA 0.00317165         NA</code></pre>
 </div>
 
 
