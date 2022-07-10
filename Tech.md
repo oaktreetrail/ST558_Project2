@@ -40,6 +40,10 @@ decide which one performed the best.
 
 These are the packages we are going to be using.
 
+## Packages Used 
+We used the following packages to complete the project:
+- tidyverse for data cleaning and transforming with dplyr, and plotting with ggplot2.
+
 ## Read In Data and Prepare It For EDA
 
 Read in the data set
