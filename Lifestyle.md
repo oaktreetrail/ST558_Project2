@@ -38,7 +38,6 @@ forest model, and a boosted tree model. At the end, we will be comparing
 the root mean square error (RMSE) of each model on the testing set and
 decide which one performed the best.
 
-These are the packages we are going to be using.
 
 ## Read In Data and Prepare It For EDA
 
