@@ -48,6 +48,18 @@ Read in the data set
 ``` r
 # Read in the data set and remove the non-predictive variables 
 shares_Data <- read_csv("OnlineNewsPopularity.csv")[-2:-1]
+```
+
+    ## Rows: 39644 Columns: 61
+    ## -- Column specification ----------------------------------------------------------------------------------------------------------------------------------------------------
+    ## Delimiter: ","
+    ## chr  (1): url
+    ## dbl (60): timedelta, n_tokens_title, n_tokens_content, n_unique_tokens, n_non_stop_words, n_non_stop_unique_tokens, num_hrefs, num_self_hrefs, num_imgs, num_videos, ave...
+    ## 
+    ## i Use `spec()` to retrieve the full column specification for this data.
+    ## i Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 # Remove the rows that have no channel assigned to them
 shares_Data <- shares_Data[rowSums(shares_Data[12:17]) != 0, ]
 ```
@@ -80,7 +92,15 @@ using.
 varcols <- c(2:4, 7, 9:11, 15, 18, 21, 24:32, 38:41, 44, 47, 52:54)
 # Subset lifestyles table into relevant columns
 shares_Channel <- shares_Channel[,varcols]
+names(shares_Channel)
 ```
+
+    ##  [1] "n_tokens_title"               "n_tokens_content"             "n_unique_tokens"              "num_hrefs"                    "num_imgs"                    
+    ##  [6] "num_videos"                   "average_token_length"         "kw_avg_min"                   "kw_avg_max"                   "kw_avg_avg"                  
+    ## [11] "self_reference_avg_sharess"   "weekday_is_monday"            "weekday_is_tuesday"           "weekday_is_wednesday"         "weekday_is_thursday"         
+    ## [16] "weekday_is_friday"            "weekday_is_saturday"          "weekday_is_sunday"            "is_weekend"                   "global_subjectivity"         
+    ## [21] "global_sentiment_polarity"    "global_rate_positive_words"   "global_rate_negative_words"   "avg_positive_polarity"        "avg_negative_polarity"       
+    ## [26] "abs_title_subjectivity"       "abs_title_sentiment_polarity" "shares"
 
 ## Create Testing and Training Data Sets
 
@@ -212,6 +232,8 @@ ggplot(daily_Channel_Train,
   labs(title = "Distribution of Shares by weekday") +
   theme(legend.position = "none")
 ```
+
+    ## Picking joint bandwidth of 267
 
 ![](Entertainment_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
@@ -432,10 +454,6 @@ standardize the data with `preProcess()`. Also use the tuning parameter
 parameter choice and model choice.
 
 ``` r
-# Parallel Processing
-cores <- detectCores()
-cl <- makePSOCKcluster(cores -1)  
-registerDoParallel(cl)
 # Linear Regression Model using LASSO
 lassoFit <- train(shares ~ ., data = daily_Channel_Train, method = "lasso",
                   trControl = trainControl(method = "cv", number = 10),
@@ -557,16 +575,20 @@ forest of decision trees. It averages splits over many individually
 created trees, but it randomly selects “m” predictors for each tree, so
 as to avoid collinearity and to reduce variability. Now, we create a
 random forest model using `train()` and specifying `method = "rf"`. We
-use `tuneGrid` to try subsets of size m=1 through m=26. We also used
-`trainControl()` to do 10-fold cross validation to help select the best
-“m” value.
+use `tuneGrid` to try subsets of size m= c(5, 10, 15, 20) for
+computational ease. We also used `trainControl()` to do 10-fold cross
+validation to help select the best “m” value.
 
 ``` r
 # Parallel Processing
+cores <- detectCores()
+cl <- makePSOCKcluster(cores -1)  
+registerDoParallel(cl)
+
 rfFit <- train(shares ~ ., data = daily_Channel_Train, method = "rf",
-               trControl = trainControl(method = "cv", number = 10),
+               trControl = trainControl(method = "cv", number = 5),
                preProcess = c("center", "scale"),
-               tuneGrid = data.frame(mtry = 1:21))
+               tuneGrid = data.frame(mtry = c(5, 10, 15, 20)))
 stopCluster(cl)
 ```
 
@@ -581,7 +603,7 @@ postResample(predsRf, obs = daily_Channel_Test$shares)
 ```
 
     ##         RMSE     Rsquared          MAE 
-    ## 8.591973e+03 2.195299e-02 2.936814e+03
+    ## 8.667687e+03 1.815778e-02 3.078592e+03
 
 ## Choose Best Model
 
@@ -622,14 +644,14 @@ best_model[[1]]
     ## Lasso          8.662592e+03  3.003976e+03
     ## Poisson       7.695626e+134 1.672962e+133
     ## Boosted Tree   8.663917e+03  3.013129e+03
-    ## Random Forest  8.591973e+03  2.936814e+03
+    ## Random Forest  8.667687e+03  3.078592e+03
 
 ``` r
 # Print out a message that tells us which model is the best based on lowest RMSE
 print(paste("The best model by finding the RMSE on the test data is the", best_model[[2]], "model."))
 ```
 
-    ## [1] "The best model by finding the RMSE on the test data is the Random Forest model."
+    ## [1] "The best model by finding the RMSE on the test data is the Lasso model."
 
 ## Conclusion
 
@@ -640,4 +662,4 @@ document. We used the same set of predictors to predict the number of
 shares that an article gets in the given channel category. Lastly, we
 were able to decide which model fit the best based on the least RMSE.
 The best model for predicting shares in the Entertainment category was
-the Random Forest model.
+the Lasso model.
