@@ -33,4 +33,4 @@ decide which one performed the best.
     here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Social%20Media.md)
 -   [Tech articles is available
     here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Tech.md)
--   [World articles is available here](blob/main/World.md)
+-   [World articles is available here](World.md)
