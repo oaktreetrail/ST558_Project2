@@ -60,7 +60,8 @@ We used the following packages to complete the project:
 -   [doParallel](https://cran.r-project.org/web/packages/doParallel/doParallel.pdf) for parallel processing, particularly when we get to the random forest model and boosted model since they are computationally expensive.
 -   [microbenchmark](https://cran.r-project.org/web/packages/microbenchmark/microbenchmark.pdf) to see how long different tasks take.
 -   [parallel](https://stat.ethz.ch/R-manual/R-devel/library/parallel/doc/parallel.pdf) to use detectCores()
-
+-   [knitr](https://cran.r-project.org/web/packages/knitr/knitr.pdf) to render code to console
+-   [rmarkdown](https://cran.r-project.org/web/packages/rmarkdown/rmarkdown.pdf) to render code to console
 ## Links to Each Article.
 
 Below are the links to each of the articles we produced.
