@@ -381,7 +381,7 @@ postResample(predsBoost, obs = daily_Channel_Test$shares)
 
 ### Random Forest Model
 
-The random forest algorithm is an extension of the bagging method as it utilizes both bagging and feature randomness to create an uncorrelated forest of decision trees. It averages splits over many individually created trees, but it randomly selects "m" predictors for each tree, so as to avoid collinearity and to reduce variability. Now, we create a random forest model using `train()` and specifying `method = "rf"`.  We use `tuneGrid` to try subsets of size m=1 through m=26.  We also used `trainControl()` to do 10-fold cross validation to help select the best "m" value.  
+The random forest algorithm is an extension of the bagging method as it utilizes both bagging and feature randomness to create an uncorrelated forest of decision trees. It averages splits over many individually created trees, but it randomly selects "m" predictors for each tree, so as to avoid collinearity and to reduce variability. Now, we create a random forest model using `train()` and specifying `method = "rf"`.  We use `tuneGrid` to try subsets of size m=c(5, 10, 15, 20) for computational ease.  We also used `trainControl()` to do 5-fold cross validation to help select the best "m" value.  
 
 ```{r}
 # Parallel Processing
@@ -390,9 +390,9 @@ cl <- makePSOCKcluster(cores -1)
 registerDoParallel(cl)
 
 rfFit <- train(shares ~ ., data = daily_Channel_Train, method = "rf",
-               trControl = trainControl(method = "cv", number = 10),
+               trControl = trainControl(method = "cv", number = 5),
                preProcess = c("center", "scale"),
-               tuneGrid = data.frame(mtry = 1:26))set
+               tuneGrid = data.frame(mtry = c(5, 10, 15, 20)))
 stopCluster(cl)
 ```
 
