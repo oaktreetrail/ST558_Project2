@@ -59,6 +59,7 @@ We used the following packages to complete the project:
 -   [gridExtra](https://cran.r-project.org/web/packages/gridExtra/gridExtra.pdf) for structuring some tables.
 -   [doParallel](https://cran.r-project.org/web/packages/doParallel/doParallel.pdf) for parallel processing, particularly when we get to the random forest model and boosted model since they are computationally expensive.
 -   [microbenchmark](https://cran.r-project.org/web/packages/microbenchmark/microbenchmark.pdf) to see how long different tasks take.
+-   [parallel](https://stat.ethz.ch/R-manual/R-devel/library/parallel/doc/parallel.pdf) to use detectCores()
 
 ## Links to Each Article.
 
