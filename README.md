@@ -23,9 +23,14 @@ forest model, and a boosted tree model. At the end, we will be comparing
 the root mean square error (RMSE) of each model on the testing set and
 decide which one performed the best.
 
-[Lifestyle articles is available
-here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Lifestyle.md)
-[Lifestyle articles is available
-here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Entertainment.md)
-[Lifestyle articles is available
-here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Business.md)
+-   [Lifestyle articles is available
+    here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Lifestyle.md)
+-   [Entertainment articles is available
+    here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Entertainment.md)
+-   [Business articles is available
+    here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Business.md)
+-   [Social Media articles is available
+    here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Social%20Media.md)
+-   [Tech articles is available
+    here](https://github.com/oaktreetrail/ST558_Project2/blob/main/Tech.md)
+-   [World articles is available here](blob/main/World.md)
