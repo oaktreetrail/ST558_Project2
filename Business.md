@@ -1,16 +1,21 @@
-ST558 Project 2: Creating predictive models and automating Markdown
-reports.
+ST558 Project 2: Creating Predictive Models and Automating Markdown
+Reports.
 ================
 Josh Baber & Lan Lin
 2022-07-06
 
--   [Introduction](#introduction)
--   [Read In Data and Prepare It For
-    EDA](#read-in-data-and-prepare-it-for-eda)
--   [Create Testing and Training Data
-    Sets](#create-testing-and-training-data-sets)
--   [Exploratory Data Analysis](#exploratory-data-analysis)
--   [Model Fitting](#model-fitting)
+-   [Channel of Interest: Business](#channel-of-interest-business)
+    -   [Introduction](#introduction)
+    -   [Read In Data and Prepare It For
+        EDA](#read-in-data-and-prepare-it-for-eda)
+    -   [Create Testing and Training Data
+        Sets](#create-testing-and-training-data-sets)
+    -   [Exploratory Data Analysis](#exploratory-data-analysis)
+    -   [Model Fitting](#model-fitting)
+    -   [Choose Best Model](#choose-best-model)
+    -   [Conclusion](#conclusion)
+
+# Channel of Interest: Business
 
 ## Introduction
 
@@ -54,7 +59,7 @@ shares_Data <- read_csv("OnlineNewsPopularity.csv")[-2:-1]
     ## i Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
 ``` r
-# Remove the ones without channel 
+# Remove the rows that have no channel assigned to them
 shares_Data <- shares_Data[rowSums(shares_Data[12:17]) != 0, ]
 ```
 
@@ -65,17 +70,17 @@ Convert the dummy variables of channels to single categorical variable
 channel <- factor(cbind(VALUE = factor(max.col(shares_Data[12:17]), ordered = TRUE)))
 # Set the levels of the channel variable
 levels(channel) <- c( 'Lifestyle', 'Entertainment', 'Business', 'Social Media', 'Tech', 'World')
-
 # Create a new data set using the single variable representing the data channel
 shares_Data_chl <- shares_Data %>% select(-starts_with("data_channel")) %>% 
                      mutate(channel) %>% 
                      select(channel, everything())
 ```
 
-Subset the data to work on the “Lifestyle” data channel
+Subset the data to work on the data channel of interest.
 
 ``` r
-shares_Lifestyle <- shares_Data_chl %>% filter(channel == "Lifestyle")
+# Filter data to only contain channel of interest
+shares_Channel <- shares_Data_chl %>% filter(channel == params$channel)
 ```
 
 Subset the data set to contain only the columns/variables we will be
@@ -83,8 +88,10 @@ using.
 
 ``` r
 # These are the column numbers of the variables we will be using
-varcols <- c(2:4, 7, 9:11, 15, 18, 21, 24:32, 38:41, 44, 47, 50:54)
-names(shares_Lifestyle)[varcols]
+varcols <- c(2:4, 7, 9:11, 15, 18, 21, 24:32, 38:41, 44, 47, 52:54)
+# Subset lifestyles table into relevant columns
+shares_Channel <- shares_Channel[,varcols]
+names(shares_Channel)
 ```
 
     ##  [1] "n_tokens_title"               "n_tokens_content"             "n_unique_tokens"              "num_hrefs"                    "num_imgs"                    
@@ -92,7 +99,7 @@ names(shares_Lifestyle)[varcols]
     ## [11] "self_reference_avg_sharess"   "weekday_is_monday"            "weekday_is_tuesday"           "weekday_is_wednesday"         "weekday_is_thursday"         
     ## [16] "weekday_is_friday"            "weekday_is_saturday"          "weekday_is_sunday"            "is_weekend"                   "global_subjectivity"         
     ## [21] "global_sentiment_polarity"    "global_rate_positive_words"   "global_rate_negative_words"   "avg_positive_polarity"        "avg_negative_polarity"       
-    ## [26] "title_subjectivity"           "title_sentiment_polarity"     "abs_title_subjectivity"       "abs_title_sentiment_polarity" "shares"
+    ## [26] "abs_title_subjectivity"       "abs_title_sentiment_polarity" "shares"
 
 ## Create Testing and Training Data Sets
 
@@ -100,33 +107,33 @@ We randomly divide up the data in 70% training data and 30% testing data
 using `createDataPartition()`.
 
 ``` r
-# Subset lifestyles table into relevant columns
-shares_Lifestyle <- shares_Lifestyle[,varcols]
-# Split into testing and training
-trainIndices <- createDataPartition(shares_Lifestyle$shares, p = 0.7, list = FALSE)
+# Split indices into testing and training
+trainIndices <- createDataPartition(shares_Channel$shares, p = 0.7, list = FALSE)
 # Create training set from indices
-lifestyleTrain <- shares_Lifestyle[trainIndices,]
+channelTrain <- shares_Channel[trainIndices,]
 # Create testing set from remaining indices
-lifestyleTest <- shares_Lifestyle[-trainIndices,]
+channelTest <- shares_Channel[-trainIndices,]
 ```
 
 ## Exploratory Data Analysis
 
-First, we made a summary statics of the response variable shares using
-`summary()`.
+First, we should look at the summary statistics of the response variable
+“shares” using `summary()`. This gives us an idea of the distribution of
+the number of shares.
 
 ``` r
-summary(lifestyleTrain$shares)
+summary(channelTrain$shares)
 ```
 
-    ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-    ##      78    1100    1700    3596    3225  139600
+    ##     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+    ##      1.0    952.2   1400.0   3110.5   2500.0 652900.0
 
 We can create a boxplot of number of shares to see how they are
 distributed using `geom_boxplot()`.
 
 ``` r
-ggplot(lifestyleTrain, aes(x = shares)) + geom_boxplot() + labs(title = "Boxplot of Shares") + 
+#Create basic boxplot of shares
+ggplot(channelTrain, aes(x = shares)) + geom_boxplot() + labs(title = "Boxplot of Shares") + 
   xlab("Number of Shares")
 ```
 
@@ -142,24 +149,25 @@ remove outlier points.
 ``` r
 # Same code as above to create but with outlier.shape = NA and
 # scale_x_continous to scale the plot down
-ggplot(lifestyleTrain, aes(x = shares)) + geom_boxplot(outlier.shape = NA) +
-  scale_x_continuous(limits = c(min(lifestyleTrain$shares), 2*IQR(lifestyleTrain$shares))) + 
+ggplot(channelTrain, aes(x = shares)) + geom_boxplot(outlier.shape = NA) +
+  scale_x_continuous(limits = c(min(channelTrain$shares), 2*IQR(channelTrain$shares))) + 
   labs(title = "Boxplot of Shares (Outliers Removed)") + xlab("Number of Shares")
 ```
 
-    ## Warning: Removed 284 rows containing non-finite values (stat_boxplot).
+    ## Warning: Removed 849 rows containing non-finite values (stat_boxplot).
 
 ![](Business_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 Then, we look at how the response variable shares differs across
 different groupings within the data.
 
-First, we create a visual of the correlations using `corrplot()`.
+Create a visual of the correlations of variables using `corrplot()`. The
+darker the shades, the more correlated the variables are. Blue indicates
+positive correlation and red indicates negative correlation.
 
 ``` r
-# Add value of correlation to plot
-Correlation <- cor(lifestyleTrain, method = "spearman")
-
+# Find the correlations of the variables in the data
+Correlation <- cor(channelTrain, method = "spearman")
 # Create a visual of the correlations
 corrplot(Correlation, type = "upper", tl.pos = "lt")
 corrplot(Correlation, type = "lower", method = "number", add = TRUE, diag = FALSE, tl.pos = "n")
@@ -172,25 +180,24 @@ weekdays.
 
 Similar to how we created the “channel” variable earlier, we can create
 a “day” variable from the “weekday_is\_\*” dummy variables. Next, we can
-create a new data set that has this column, and `group_by()` day to see
-some summary statistics of shares by each day. Use `summarize()` to find
-the mean, median, minimum, maximum, and standard deviation of shares for
-each day of the week.
+create a new data set that has this column, and `group_by()` “day” to
+see some summary statistics of shares by each day. Use `summarize()` to
+find the mean, median, minimum, maximum, and standard deviation of
+shares for each day of the week.
 
 ``` r
 # create a single variable representing the day of the week  
-day <- factor(cbind(VALUE = factor(max.col(lifestyleTrain[12:18]), ordered = TRUE)))
+day <- factor(cbind(VALUE = factor(max.col(channelTrain[12:18]), ordered = TRUE)))
 # Specify a level for each day
 levels(day) <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
-
 # Create a new data set using the single variable representing the day
-daily_Shares_Data_Lifestyle <- lifestyleTrain %>% 
+daily_Channel_Train <- channelTrain %>% 
   select(-starts_with("weekday_is")) %>% 
   mutate(day) %>% 
   select(day, everything())
 # Get the mean, median, minimum, maximum, and standard deviation
 # of shares for each day
-daily_Shares_Data_Lifestyle %>% 
+daily_Channel_Train %>% 
   group_by(day) %>%
   summarize(avgShares = mean(shares), medShares = median(shares), minShares = min(shares), 
             maxShares = max(shares), sdShares = sd(shares))
@@ -199,40 +206,43 @@ daily_Shares_Data_Lifestyle %>%
     ## # A tibble: 7 x 6
     ##   day       avgShares medShares minShares maxShares sdShares
     ##   <fct>         <dbl>     <dbl>     <dbl>     <dbl>    <dbl>
-    ## 1 Monday        3887.      1500       109    139600   10227.
-    ## 2 Tuesday       3518.      1400        93     81200    7900.
-    ## 3 Wednesday     3417.      1700        78     73100    6291.
-    ## 4 Thursday      3673.      1600       173     56000    6536.
-    ## 5 Friday        3304.      1400       127     40400    5290.
-    ## 6 Saturday      4295.      2300       446     43000    5917.
-    ## 7 Sunday        3288.      2000       613     27500    3710.
+    ## 1 Monday        3418.      1400         1    652900   23144.
+    ## 2 Tuesday       2981.      1300        44    310800   12044.
+    ## 3 Wednesday     2906.      1300       200    158900    9479.
+    ## 4 Thursday      3174.      1300        99    306100   15659.
+    ## 5 Friday        2521.      1500        28    102200    5965.
+    ## 6 Saturday      4732.      2600       318    144400   11925.
+    ## 7 Sunday        3399.      2100       692     44800    4266.
 
 Then, we can visualize the distribution of shares by weekday using
-`geom_density_ridges()`. The grouping variable weekday will be mapped to
-the y-axis:
+`geom_density_ridges()`. The grouping variable “day” will be mapped to
+the y-axis. We can also subset the plot to only contain the first 90% of
+the data using `coord_cartesian()`, since outliers will make the graph
+otherwise hard to see.
 
 ``` r
-ggplot(daily_Shares_Data_Lifestyle, 
+# Create density plot of shares for each day
+ggplot(daily_Channel_Train, 
        aes(x = shares, 
            y = day)) +
   geom_density_ridges(aes(fill = day)) + 
-  coord_cartesian(xlim = quantile(shares_Lifestyle$shares, c(0, 0.9))) +
+  coord_cartesian(xlim = quantile(daily_Channel_Train$shares, c(0, 0.9))) +
   theme_ridges() +
   labs(title = "Distribution of Shares by weekday") +
   theme(legend.position = "none")
 ```
 
-    ## Picking joint bandwidth of 518
+    ## Picking joint bandwidth of 334
 
 ![](Business_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 Next, we can make a line graph to visualize how the average number of
-shares changes by day. To do this we use create table of the average
+shares changes by day. To do this we create a table of the average
 shares for each day then plot them using `geom_line()` from `ggplot2`.
 
 ``` r
 # Create table of daily averages
-daily_Means <- daily_Shares_Data_Lifestyle %>% 
+daily_Means <- daily_Channel_Train %>% 
   group_by(day) %>%
   summarize(avgShares = mean(shares))
 # Create line plot with labels and titles
@@ -249,19 +259,19 @@ articles produced each day using `table()`.
 
 ``` r
 # Counts by day
-table(daily_Shares_Data_Lifestyle$day)
+table(daily_Channel_Train$day)
 ```
 
     ## 
     ##    Monday   Tuesday Wednesday  Thursday    Friday  Saturday    Sunday 
-    ##       222       237       271       251       208       130       153
+    ##       822       827       900       845       587       162       239
 
 We can get a decent idea of the distribution of the number of links,
 images, and videos in each article using `summarize()`.
 
 ``` r
 # Get means and standard deviations
-lifestyleTrain %>% 
+channelTrain %>% 
   summarize(avgLinks = mean(num_hrefs), sdLinks = sd(num_hrefs), avgImages = mean(num_imgs), 
             sdImages = sd(num_imgs), avgVideos = mean(num_videos), sdVideos = sd(num_videos))
 ```
@@ -269,7 +279,7 @@ lifestyleTrain %>%
     ## # A tibble: 1 x 6
     ##   avgLinks sdLinks avgImages sdImages avgVideos sdVideos
     ##      <dbl>   <dbl>     <dbl>    <dbl>     <dbl>    <dbl>
-    ## 1     13.7    11.9      4.83     7.45     0.438     1.46
+    ## 1     9.29    8.36      1.82     3.54     0.658     3.41
 
 It may be important to see if the overall length, or word count, of the
 article affects how many shares it gets. A reader may be discouraged
@@ -280,7 +290,7 @@ visualization of this relationship.
 
 ``` r
 # Create scatter plot of n_tokens_content and number of shares
-ggplot(data = lifestyleTrain, aes(x = n_tokens_content, y = shares)) + 
+ggplot(data = channelTrain, aes(x = n_tokens_content, y = shares)) + 
   geom_point(aes(col = factor(is_weekend))) + 
   labs(title = "Word Count and Shares, Colored by Weekend/Weekday") + 
   xlab("Word Count") + ylab("Number of Shares") + 
@@ -290,80 +300,84 @@ ggplot(data = lifestyleTrain, aes(x = n_tokens_content, y = shares)) +
 ![](Business_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 Again, outliers may be an issue, and may make it harder to see the
-relationships for most of the variables. To scale down, we can use the
+relationships for most of the data. To scale down, we can use the
 `coord_cartesian()` function to subset the amount of plot shown to
 contain the first 95% of each variable using the `quantile()` function.
 
 ``` r
 # Subset scatter plot to show the first 95% of the data for each variable
-ggplot(data = lifestyleTrain, aes(x = n_tokens_content, y = shares)) + 
+ggplot(data = channelTrain, aes(x = n_tokens_content, y = shares)) + 
   geom_point(aes(col = factor(is_weekend))) + 
   labs(title = " Zoomed In Word Count and Shares, Colored by Weekend/Weekday") + 
   xlab("Word Count") + ylab("Number of Shares") + 
   scale_color_discrete(name = " ", labels = c("Weekday", "Weekend")) + 
-  coord_cartesian(xlim = c(0, quantile(lifestyleTrain$n_tokens_content, 0.95)),  
-                  ylim = c(0, quantile(lifestyleTrain$shares, 0.95)))
+  coord_cartesian(xlim = c(0, quantile(channelTrain$n_tokens_content, 0.95)),  
+                  ylim = c(0, quantile(channelTrain$shares, 0.95)))
 ```
 
 ![](Business_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 It may be also important to see if the absolute subjectivity level and
-absolute polarity level of the article title affects how many shares it
-gets. If the article title is too sentimental, a reader may consider it
-as un-professional and be discouraged from sharing an article. We can
-look at a scatter plot of abs_title_subjectivity vs. shares using
-`geom_point()` to better get a visualization of this relationship, and
-compare it with a scatter plot of abs_title_sentiment_polarity
-vs. shares side-by-side.
+absolute polarity level of the article’s title affects how many shares
+it gets. For example, if the article title is too sentimental, a reader
+may consider it as un-professional and be discouraged from sharing an
+article. We can look at a scatter plot of abs_title_subjectivity
+vs. shares using `geom_point()` to better get a visualization of this
+relationship, and compare it with a scatter plot of
+abs_title_sentiment_polarity vs. shares side-by-side using
+`grid.arrange()`. Again, we need to use `coord_cartesian()` here to
+include only the first 90% of the data to avoid seeing huge outliers. We
+also separated the scatter plots based on whether or not it was a
+weekday and plotted them separately using `fact_grid()`.
 
 ``` r
-# Subset scatter plot to show the first 95% of the data for each variable
-plot_title_subjectivity <- ggplot(data = lifestyleTrain, aes(x = abs_title_subjectivity, y = shares)) + 
+# First make scatter plots of the subjectivity vs. shares separated by weekend/weekday
+plot_title_subjectivity <- ggplot(data = channelTrain, aes(x = abs_title_subjectivity, y = shares)) + 
                              geom_point(aes(col = factor(is_weekend)),position = "jitter") +
                              facet_grid(factor(is_weekend) ~.) +
                              labs(title = "  Absolute subjectivity level of article title by Weekend/Weekday") + 
                                xlab(" Absolute subjectivity level of article title") + ylab("Number of Shares") + 
                              scale_color_discrete(name = " ", labels = c("Weekday", "Weekend")) +
-                             coord_cartesian(xlim = c(0, quantile(lifestyleTrain$abs_title_subjectivity, 0.9)),  
-                               ylim = c(0.2, quantile(lifestyleTrain$shares, 0.9)))
-
-plot_title_sentiment_polarity <- ggplot(data = lifestyleTrain, aes(x = abs_title_sentiment_polarity, y = shares)) + 
+                             coord_cartesian(xlim = c(0, quantile(channelTrain$abs_title_subjectivity, 0.9)),  
+                               ylim = c(0.2, quantile(channelTrain$shares, 0.9)))
+# Next, make scatter plots of sentiment vs. shares separated by weekend/weekday
+plot_title_sentiment_polarity <- ggplot(data = channelTrain, aes(x = abs_title_sentiment_polarity, y = shares)) + 
                                    geom_point(aes(col = factor(is_weekend)),position = "jitter") +
                                    facet_grid(factor(is_weekend) ~.) +
                                    labs(title = " Absolute polarity level of article title by Weekend/Weekday") + 
                                      xlab("Absolute polarity level of article title") + ylab("Number of Shares") + 
                                    scale_color_discrete(name = " ", labels = c("Weekday", "Weekend")) +
-                                   coord_cartesian(xlim = c(0, quantile(lifestyleTrain$abs_title_sentiment_polarity, 0.9)),  
-                                     ylim = c(0.2, quantile(lifestyleTrain$shares, 0.9)))
-
+                                   coord_cartesian(xlim = c(0, quantile(channelTrain$abs_title_sentiment_polarity, 0.9)),  
+                                     ylim = c(0.2, quantile(channelTrain$shares, 0.9)))
+# Arranged the plots in a 1 row, 2 column grid
 grid.arrange(plot_title_subjectivity, plot_title_sentiment_polarity, nrow=1, ncol=2)
 ```
 
 ![](Business_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
-We are also interested in how best vs worst keywords affect the average
-numbers of shares. A reader may be discouraged from sharing an article
-if its keywords are two negative. We can look at a box plot of type of
-keywords vs. log(avg.shares) using `geom_boxplot()` to better get a
-visualization of this relationship.
+We are also interested in how “best” and “worst” keywords affect the
+average numbers of shares. A reader may be discouraged from sharing an
+article if its keywords are too negative. We can look at a box plot of
+type of keywords vs. log(avg.shares) using `geom_boxplot()` to better
+get a visualization of this relationship.
 
 ``` r
 # Create a keywords data set to plot
-keywords <- as_tibble(data.frame(avg.shares = c(lifestyleTrain$kw_avg_min, lifestyleTrain$kw_avg_max), 
-                                  keywords = c(rep("Worst_keyword", nrow(lifestyleTrain)), rep("Best_keyword", nrow(lifestyleTrain))))) 
-
+keywords <- as_tibble(data.frame(avg.shares = c(channelTrain$kw_avg_min, channelTrain$kw_avg_max), 
+                                  keywords = c(rep("Worst_keyword", nrow(channelTrain)), rep("Best_keyword", nrow(channelTrain))))) 
 # Create a box plot
 ggplot(data = keywords, aes(x = keywords, y = log2(avg.shares), fill = keywords)) + 
   geom_boxplot() +
   labs(title =  "Log of Average Numbers of Shares by Keyword Type",
-         x = "Keyword Type", y = "Log of Average Numbers of Shares")
+         x = "Keyword Type", y = "Log of Average Numbers of Shares") +
+  scale_fill_discrete(name = "Keyword", labels = c("Best", "Worst"))
 ```
 
     ## Warning in FUN(X[[i]], ...): NaNs produced
 
     ## Warning in FUN(X[[i]], ...): NaNs produced
 
-    ## Warning: Removed 46 rows containing non-finite values (stat_boxplot).
+    ## Warning: Removed 106 rows containing non-finite values (stat_boxplot).
 
 ![](Business_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
@@ -373,36 +387,31 @@ Now that we have a good idea of how the data is distributed and
 different variables interact with each other, we can fit models to the
 data in order to predict the number of shares an article will get based
 on the predictors we’ve been using. First, we are going to fit two
-linear regression models using LASSO regression and Poisson
-regression.Then we are going to fit a boosted tree model and a random
-forest model.
+linear regression models using LASSO regression and Poisson regression.
+Then we are going to fit a boosted tree model and a random forest model.
 
-The linear regression model requires a full rank matrix, so we can’t
-have the dummy variable columns for the days of the week. So we must
-keep using the data set that has the “day” column variable. We should
-also convert the dummy variables to a “day” column variable for the
-testing set, so that we can use our model on it. Also, we need to delete
-the “is_weekend” indicator variable from both data sets, since it is
-redundant because we already have the days of the week variable.
+We are also going to use parallel processing using the `doParallel`
+package to fit these models faster. To avoid collinearity issues, we
+will use the training set and testing set that has the “day” column
+instead of the dummy variables. We must also drop the `is_weekend`
+column from our testing and training data sets to avoid collinearity
+issues with the “day” column.
 
 ``` r
-# Remove is_weekend variable and keep day column
-dailyLifestyleTrain <- daily_Shares_Data_Lifestyle %>% select(-is_weekend)
-# Build day variable
-day <- factor(cbind(VALUE = factor(max.col(lifestyleTest[12:18]), ordered = TRUE)))
-# Give day levels
+# create a single variable representing the day of the week for the testing set.
+day <- factor(cbind(VALUE = factor(max.col(channelTest[12:18]), ordered = TRUE)))
+# Specify a level for each day
 levels(day) <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
-
-# Create a new testing set that has the day variable
-daily_Shares_Test_Lifestyle <- lifestyleTest %>% 
+# Create a new testing data set that uses the single variable representing the day
+daily_Channel_Test <- channelTest %>% 
   select(-starts_with("weekday_is")) %>% 
   mutate(day) %>% 
   select(day, everything())
-# Drop the is_weekend variable from the testing set
-dailyLifestyleTest <- daily_Shares_Test_Lifestyle %>% select(-is_weekend)
+daily_Channel_Train <- daily_Channel_Train %>% select(-is_weekend)
+daily_Channel_Test <- daily_Channel_Test %>% select(-is_weekend)
 ```
 
-`The idea of linear regression model:`
+### What is Linear Regression?
 
 -   Linear regression attempts to model the relationship between a
     scalar response and one or more explanatory variables by fitting a
@@ -426,13 +435,28 @@ dailyLifestyleTest <- daily_Shares_Test_Lifestyle %>% select(-is_weekend)
     normally distributed responses, logistic models for binary data,
     poison models for count data etc.
 
+### LASSO Model
+
+I used the LASSO method to perform to choose a subset of predictors that
+best predicts the number of shares. This helps when we have a ton of
+predictors and some of them have high collinearity. The motivation for
+LASSO regression comes from the bias-variance trade-off. Having many
+predictors can lead to low bias, but high variance, which can be a
+problem when it comes to predicting the testing set. So using LASSO
+selection will trade a little bit of bias to reduce the variance
+significantly, leading to a better model.
+
 Fit a LASSO trained model using the training data with `train()` and
-standardize the data with `preProcess()`. *Insert LASSO regression
-explanation here*
+standardize the data with `preProcess()`. Also use the tuning parameter
+“fraction” to choose the best shrinkage out of 0.01, 0.05, and 0.1. Use
+10-fold cross validation here to ensure we get a more solid tuning
+parameter choice and model choice.
 
 ``` r
 # Linear Regression Model using LASSO
-lassoFit <- train(shares ~ ., data = dailyLifestyleTrain, method = "lasso",
+lassoFit <- train(shares ~ ., data = daily_Channel_Train, method = "lasso",
+                  trControl = trainControl(method = "cv", number = 10),
+                  tuneGrid = expand.grid(fraction = c(0.01, 0.05, 0.1)),
                   preProcess = c("center", "scale"))
 ```
 
@@ -442,21 +466,25 @@ get the error diagnostics using `postResample()`.
 
 ``` r
 # Make predictions with linear model
-predslinear <- predict(lassoFit, newdata = dailyLifestyleTest)
+predslinear <- predict(lassoFit, newdata = daily_Channel_Test)
 # See how well the model fits
-postResample(predslinear, obs = dailyLifestyleTest$shares)
+postResample(predslinear, obs = daily_Channel_Test$shares)
 ```
 
     ##         RMSE     Rsquared          MAE 
-    ## 1.221777e+04 3.812147e-03 3.428810e+03
+    ## 1.663965e+04 1.917831e-03 2.665639e+03
 
-Poisson distribution is useful for modeling counts. So, we fit a poisson
-trained model using the training data with `train()`, specify
-`method = "glm"` and `family = "poisson"`, and standardize the data with
-`preProcess()`.
+### Poisson Regression Model
+
+Poisson distribution is useful for modeling counts, which we are
+counting number of shares. So, we fit a poisson trained model using the
+training data with `train()`, specify `method = "glm"` and
+`family = "poisson"`, and standardize the data with `preProcess()`.
+Also, perform 10-fold cross validation to select the best model using
+`trainControl()`.
 
 ``` r
-poiFit <- train(shares ~ ., data = dailyLifestyleTrain, method = "glm", 
+poiFit <- train(shares ~ ., data = daily_Channel_Train, method = "glm", 
                 family=poisson(link = "log"),
                 trControl = trainControl(method = "cv", number = 10),
                 preProcess = c("center", "scale"))
@@ -468,26 +496,43 @@ and get the error diagnostics using `postResample()`.
 
 ``` r
 # Make predictions with poisson regression model
-predsPoi <- predict(poiFit, newdata = dailyLifestyleTest)
+predsPoi <- predict(poiFit, newdata = daily_Channel_Test)
 # See how well the model fits
-postResample(predsPoi, obs = dailyLifestyleTest$shares)
+postResample(predsPoi, obs = daily_Channel_Test$shares)
 ```
 
     ##         RMSE     Rsquared          MAE 
-    ## 1.218495e+04 8.907943e-03 3.435253e+03
+    ## 2.258426e+04 3.250761e-04 3.125461e+03
 
-*Insert ensemble model explanation here*
+### Boosted Tree Model
 
-The next model we fit is a boosted tree model using `train()`. We need
-to specify `method = "gbm"` and there are four tuning parameters that we
-need to select. *Insert explanation about boosted tree models here and
-its tuning parameters here*
+Before I explain what a Boosted Tree model is, I must first explain the
+concept of a regression tree. Regression trees split up the predictors
+into regions, based on optimal values of predictors. If the tree decides
+to split at one value, it may decide to split again at another value
+afterwards, effectively create a branch that has many branches. The data
+point is then predicted depending on where it falls in the decision
+tree. There can be very many branches and splits, which is not always
+the best case, so to avoid this, we can create many, many trees, and try
+to come up with an agreeable, less complex decision tree.  
+Boosted Tree models do this through a gradient approach. It starts its
+predictions at 0, then measures how well it predicts the data. It then
+creates a tree with a predetermined number of splits, which improves the
+model, but only by a small amount (controlled by shrinkage). It
+continues to build on the tree until it converges upon an optimal model
+that minimizes prediction error.
+
+Fit a boosted tree model using `train()`. We need to specify
+`method = "gbm"` and there are four tuning parameters that we need to
+select including shrinkage, number of trees, tree depth, and minimum
+node observations. I specified 4 possible values for each of these
+tuning parameters, so using `expand.grid()` in the `tuneGrid` argument,
+the algorithm will search for the best combination out of 4^4 = 256
+total combinations. I perform 10-fold cross validation here using
+`trainControl()` in order to help choose the best combination of tuning
+parameters.
 
 ``` r
-# Parallel Processing
-cl <- makePSOCKcluster(3)
-registerDoParallel(cl)
-
 # Values of n.trees
 nTrees <- c(10, 50, 100, 200)
 # Values of interaction.depth
@@ -497,7 +542,7 @@ shrink <- c(0.001, 0.05, 0.1, 0.5)
 # Value of n.minobsinnode
 nodeMinN <- c(5, 10, 15, 20)
 # Fit the boosted tree model on the training data
-lifestyleBoost <- train(shares ~ ., data = lifestyleTrain, method = "gbm",
+boostFit <- train(shares ~ ., data = daily_Channel_Train, method = "gbm",
                         # Perform 5 fold cross validation repeated 3 times
                         trControl = trainControl(method = "cv", number = 10),
                         # Standardize the data, hide output with verborse = FALSE
@@ -513,27 +558,36 @@ testing set.
 
 ``` r
 # Make predictions with boosted model
-predsBoost <- predict(lifestyleBoost, newdata = lifestyleTest)
+predsBoost <- predict(boostFit, newdata = daily_Channel_Test)
 # Check model fit diagnostics
-postResample(predsBoost, obs = lifestyleTest$shares)
+postResample(predsBoost, obs = daily_Channel_Test$shares)
 ```
 
     ##         RMSE     Rsquared          MAE 
-    ## 1.223263e+04 1.474695e-03 3.370848e+03
+    ## 1.660069e+04 6.752280e-03 2.624632e+03
+
+### Random Forest Model
 
 The random forest algorithm is an extension of the bagging method as it
 utilizes both bagging and feature randomness to create an uncorrelated
-forest of decision trees. Now, we create a random forest tree model
-using `train()` and specify `method = "rf"`.
+forest of decision trees. It averages splits over many individually
+created trees, but it randomly selects “m” predictors for each tree, so
+as to avoid collinearity and to reduce variability. Now, we create a
+random forest model using `train()` and specifying `method = "rf"`. We
+use `tuneGrid` to try subsets of size m= c(5, 10, 15, 20) for
+computational ease.. We also used `trainControl()` to do 5-fold cross
+validation to help select the best “m” value.
 
 ``` r
 # Parallel Processing
-rfFit <- train(shares ~ ., data = dailyLifestyleTrain, method = "rf",
-               trControl = trainControl(method = "cv", number = 10),
-               preProcess = c("center", "scale"),
-               tuneGrid = data.frame(mtry = 1:22))
+cores <- detectCores()
+cl <- makePSOCKcluster(cores -1)  
+registerDoParallel(cl)
 
-stopCluster(cl)
+rfFit <- train(shares ~ ., data = daily_Channel_Train, method = "rf",
+               trControl = trainControl(method = "cv", number = 5),
+               preProcess = c("center", "scale"),
+               tuneGrid = data.frame(mtry = c(5, 10, 15, 20)))
 ```
 
 Now we can make predictions and get the model diagnostics using the
@@ -541,95 +595,69 @@ testing set.
 
 ``` r
 # Make predictions with random forest model
-predsRf <- predict(rfFit, newdata = lifestyleTest)
+predsRf <- predict(rfFit, newdata = daily_Channel_Test)
 # Check model fit diagnostics
-postResample(predsRf, obs = lifestyleTest$shares)
+postResample(predsRf, obs = daily_Channel_Test$shares)
 ```
 
     ##         RMSE     Rsquared          MAE 
-    ## 1.221926e+04 3.171650e-03 3.411661e+03
+    ## 1.714216e+04 4.382388e-03 2.810668e+03
 
-Find the model by finding the RMSE on the test data
+## Choose Best Model
+
+Write a function that finds the best model out of our four models based
+on the lowest RMSE. It does the same `postResample()` process as before,
+but it then finds the minimum RMSE of the models, and it prints out a
+data frame of the fit diagnostics and a message that says which is the
+best model based on RMSE.
 
 ``` r
 # Create a function to find the best model 
 get_bestModel <- function(lasso, poi, boost, rf){
   # Put all the fit results in a data frame
-  fit.results <- data.frame(rbind("Lasso"= postResample(lasso, lifestyleTest$shares),
-                                  "Poisson"= postResample(poi, lifestyleTest$shares),
-                                  "boosted"= postResample(boost, lifestyleTest$shares),
-                                  "`Random Forest`" = postResample(rf,lifestyleTest$shares)))
-  # return the row name of the model which has the smallest RMSE
+  fit.results <- data.frame(rbind("Lasso"= postResample(lasso, daily_Channel_Test$shares),
+                                  "Poisson"= postResample(poi, daily_Channel_Test$shares),
+                                  "Boosted Tree"= postResample(boost, daily_Channel_Test$shares),
+                                  "Random Forest" = postResample(rf, daily_Channel_Test$shares)))
+  # Select the RMSE and MAE columns for comparison
+  fit.results <- fit.results[,-2]
+  # Return the row name of the model which has the smallest RMSE as a string
   best_model_name <- row.names(fit.results)[fit.results$RMSE == min(fit.results$RMSE)]
+  # Return both the data frame of RMSE and MAE columns, as well as the string of best model name in a list
   return(list(fit.results, best_model_name))
 }
 ```
 
-Print out the results
+Apply this function to our models to assess their fit and decide which
+one is the best.
 
 ``` r
-# Model compassion 
+# Apply function and save it as "best_model"
 best_model <- get_bestModel(predslinear, predsPoi, predsBoost, predsRf)
-
+# Print out the data frame of RMSE and MAE
 best_model[[1]]
 ```
 
-    ##                     RMSE    Rsquared      MAE
-    ## Lasso           12217.77 0.003812147 3428.810
-    ## Poisson         12184.95 0.008907943 3435.253
-    ## boosted         12232.63 0.001474695 3370.848
-    ## `Random Forest` 12219.26 0.003171650 3411.661
+    ##                   RMSE      MAE
+    ## Lasso         16639.65 2665.639
+    ## Poisson       22584.26 3125.461
+    ## Boosted Tree  16600.69 2624.632
+    ## Random Forest 17142.16 2810.668
 
 ``` r
-# Best model 
-print(paste("The best model by finding the RMSE on the test data is the", best_model[[2]], "moeel."))
+# Print out a message that tells us which model is the best based on lowest RMSE
+print(paste("The best model by finding the RMSE on the test data is the", best_model[[2]], "model."))
 ```
 
-    ## [1] "The best model by finding the RMSE on the test data is the Poisson moeel."
+    ## [1] "The best model by finding the RMSE on the test data is the Boosted Tree model."
 
-Write a function that finds the best model out of our four models based
-on the lowest RMSE. It does the same `predict()` and `postResample()`
-process as before, but subsets to just the first item, which is the
-RMSE, for each model. It then finds the minimum of these and checks if
-the minimum is equal to the RMSE for each model, and if it is print a
-message that says that model is the best.
+## Conclusion
 
-``` r
-# Create function that takes in models as inputs
-bestModel <- function(linearmodel, boostedmodel){
-  # Get predictions from the linear model
-  predslinear <- predict(linearmodel, newdata = lifestyleTest)
-  # Get predictions from the boosted tree model
-  predsboost <- predict(boostedmodel, newdata = lifestyleTest)
-  # Grab the RMSE for the linear model
-  RMSElinear <- postResample(predslinear, obs = lifestyleTest$shares)[[1]]
-  # Grab the RMSE for the boosted tree model
-  RMSEboost <- postResample(predsboost, obs = lifestyleTest$shares)[[1]]
-  # Find the minimum RMSE
-  bestRMSE <- min(c(RMSElinear, RMSEboost))
-  # If the RMSE from the linear model is the minimum, say it's the best model
-  if(bestRMSE == RMSElinear){
-    print("The Linear Model Had the Lowest RMSE")
-  }
-  # If the RMSE from the boosted tree model is the minimum, say it's the best model
-  else if(bestRMSE == RMSEboost){
-    print("The Boosted Tree Model Had the Lowest RMSE")
-  }
-}
-```
-
-We can now use this function to find which model is the best fit.
-
-``` r
-# Choose best model from the ones submitted
-bestModel(linearmodel = lassoFit, boostedmodel = lifestyleBoost)
-```
-
-    ## [1] "The Linear Model Had the Lowest RMSE"
-
-``` r
-postResample(c(predsRf, predsBoost), obs = lifestyleTest$shares)
-```
-
-    ##       RMSE   Rsquared        MAE 
-    ##         NA 0.00317165         NA
+In this project, we used automation to find summaries, graphs, and
+models for predictions for each of six channels separately. We can
+recycle the code for EDA and model fitting based on the channel for this
+document. We used the same set of predictors to predict the number of
+shares that an article gets in the given channel category. Lastly, we
+were able to decide which model fit the best based on the least RMSE.
+The best model for predicting shares in the Business category was the
+Boosted Tree model.
