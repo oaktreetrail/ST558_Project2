@@ -48,6 +48,18 @@ Read in the data set
 ``` r
 # Read in the data set and remove the non-predictive variables 
 shares_Data <- read_csv("OnlineNewsPopularity.csv")[-2:-1]
+```
+
+    ## Rows: 39644 Columns: 61
+    ## -- Column specification -----------------------------------------------------------------------------------------------------------------------------------------------------
+    ## Delimiter: ","
+    ## chr  (1): url
+    ## dbl (60): timedelta, n_tokens_title, n_tokens_content, n_unique_tokens, n_non_stop_words, n_non_stop_unique_tokens, num_hrefs, num_self_hrefs, num_imgs, num_videos, aver...
+    ## 
+    ## i Use `spec()` to retrieve the full column specification for this data.
+    ## i Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 # Remove the rows that have no channel assigned to them
 shares_Data <- shares_Data[rowSums(shares_Data[12:17]) != 0, ]
 ```
@@ -212,6 +224,8 @@ ggplot(daily_Channel_Train,
   labs(title = "Distribution of Shares by weekday") +
   theme(legend.position = "none")
 ```
+
+    ## Picking joint bandwidth of 553
 
 ![](Social%20Media_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
@@ -432,10 +446,6 @@ standardize the data with `preProcess()`. Also use the tuning parameter
 parameter choice and model choice.
 
 ``` r
-# Parallel Processing
-cores <- detectCores()
-cl <- makePSOCKcluster(cores -1)  
-registerDoParallel(cl)
 # Linear Regression Model using LASSO
 lassoFit <- train(shares ~ ., data = daily_Channel_Train, method = "lasso",
                   trControl = trainControl(method = "cv", number = 10),
@@ -557,17 +567,20 @@ forest of decision trees. It averages splits over many individually
 created trees, but it randomly selects “m” predictors for each tree, so
 as to avoid collinearity and to reduce variability. Now, we create a
 random forest model using `train()` and specifying `method = "rf"`. We
-use `tuneGrid` to try subsets of size m=1 through m=26. We also used
-`trainControl()` to do 10-fold cross validation to help select the best
-“m” value.
+use `tuneGrid` to try subsets of size m= c(5, 10, 15, 20) for
+computational ease.. We also used `trainControl()` to do 5-fold cross
+validation to help select the best “m” value.
 
 ``` r
 # Parallel Processing
+cores <- detectCores()
+cl <- makePSOCKcluster(cores -1)  
+registerDoParallel(cl)
+
 rfFit <- train(shares ~ ., data = daily_Channel_Train, method = "rf",
-               trControl = trainControl(method = "cv", number = 10),
+               trControl = trainControl(method = "cv", number = 5),
                preProcess = c("center", "scale"),
-               tuneGrid = data.frame(mtry = 1:21))
-stopCluster(cl)
+               tuneGrid = data.frame(mtry = c(5, 10, 15, 20)))
 ```
 
 Now we can make predictions and get the model diagnostics using the
@@ -581,7 +594,7 @@ postResample(predsRf, obs = daily_Channel_Test$shares)
 ```
 
     ##         RMSE     Rsquared          MAE 
-    ## 5.695011e+03 5.417493e-02 2.768392e+03
+    ## 5.690688e+03 5.515387e-02 2.769329e+03
 
 ## Choose Best Model
 
@@ -622,7 +635,7 @@ best_model[[1]]
     ## Lasso         5836.729 2806.186
     ## Poisson       6415.924 2847.719
     ## Boosted Tree  5686.488 2694.808
-    ## Random Forest 5695.011 2768.392
+    ## Random Forest 5690.688 2769.329
 
 ``` r
 # Print out a message that tells us which model is the best based on lowest RMSE
