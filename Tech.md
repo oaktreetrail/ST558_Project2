@@ -50,6 +50,7 @@ We used the following packages to complete the project:
 - `gridExtra` for structuring some tables.
 - `doParallel` for parallel processing, particularly when we get to the random forest model and boosted model since they are computationally expensive.
 
+
 ## Read In Data and Prepare It For EDA
 
 Read in the data set
