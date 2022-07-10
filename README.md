@@ -4,6 +4,8 @@ reports.
 Josh Baber & Lan Lin
 2022-07-06
 
+## Brief Description of Repo 
+
 This report will be analyzing and fitting models on the [Online News
 Popularity Data
 Set](https://archive.ics.uci.edu/ml/datasets/Online+News+Popularity)
@@ -23,9 +25,48 @@ forest model, and a boosted tree model. At the end, we will be comparing
 the root mean square error (RMSE) of each model on the testing set and
 decide which one performed the best.
 
--   [Lifestyle articles is available here](Lifestyle.html)
--   [Entertainment articles is available here](Entertainment.html)
--   [Business articles is available here](Business.html)
--   [Social Media articles is available here](Social%20Media.html)
--   [Tech articles is available here](Tech.html)
--   [World articles is available here](World.html)
+To automate the creation of the documents, we created a data frame of channels and channel file names.  We had to specify the channel file names in the YAML header like so:
+
+`params:  
+  channel:  
+    label: "Data Channel"  
+    value: Lifestyle  
+    input: select  
+    choices: [Lifestyle, Entertainment, Business, Social Media, Tech, World]`
+    
+Then, after creating a data frame with two columns, one for file name and one for channel name, we could submit this code to render all six documents:
+
+`library(rmarkdown)  
+apply(reports, MARGIN = 1,  
+      FUN = function(x){  
+        render(input = "ST558_Project2.Rmd",  
+               output_file = x[[1]],  
+               params = x[[2]],  
+               output_format="github_document",  
+               output_options=list(html_preview=FALSE, toc=TRUE, toc_depth=2))  
+      })`
+
+## Packages Used 
+
+We used the following packages to complete the project:
+
+-   [tidyverse](https://www.tidyverse.org/) for data cleaning and transforming with dplyr, and plotting with ggplot2.
+-   [reader](https://cran.r-project.org/web/packages/reader/reader.pdf) for reading files.
+-   [corrplot](https://www.rdocumentation.org/packages/corrplot/versions/0.92) for creating a detailed correlation plot of variables.
+-   [caret](https://topepo.github.io/caret/) for training our models, we used caret to train all four of our models.
+-   [elasticnet](https://cran.r-project.org/web/packages/elasticnet/elasticnet.pdf) a package that is necessary for the boosted tree model.
+-   [ggridges](https://cran.r-project.org/web/packages/ggridges/ggridges.pdf) for creating a plot that has multiple density plots in "ridges".
+-   [gridExtra](https://cran.r-project.org/web/packages/gridExtra/gridExtra.pdf) for structuring some tables.
+-   [doParallel](https://cran.r-project.org/web/packages/doParallel/doParallel.pdf) for parallel processing, particularly when we get to the random forest model and boosted model since they are computationally expensive.
+-   [microbenchmark](https://cran.r-project.org/web/packages/microbenchmark/microbenchmark.pdf) to see how long different tasks take.
+
+## Links to Each Article.
+
+Below are the links to each of the articles we produced.
+
+-   [Lifestyle article is available here](Lifestyle.html)
+-   [Entertainment article is available here](Entertainment.html)
+-   [Business article is available here](Business.html)
+-   [Social Media article is available here](Social%20Media.html)
+-   [Tech article is available here](Tech.html)
+-   [World article is available here](World.html)
