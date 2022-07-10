@@ -23,9 +23,9 @@ forest model, and a boosted tree model. At the end, we will be comparing
 the root mean square error (RMSE) of each model on the testing set and
 decide which one performed the best.
 
--   [Lifestyle articles is available here](Lifestyle.md)
--   [Entertainment articles is available here](Entertainment.md)
--   [Business articles is available here](Business.md)
--   [Social Media articles is available here](Social%20Media.md)
--   [Tech articles is available here](Tech.md)
--   [World articles is available here](World.md)
+-   [Lifestyle articles is available here](Lifestyle.html)
+-   [Entertainment articles is available here](Entertainment.html)
+-   [Business articles is available here](Business.html)
+-   [Social Media articles is available here](Social%20Media.html)
+-   [Tech articles is available here](Tech.html)
+-   [World articles is available here](World.html)
