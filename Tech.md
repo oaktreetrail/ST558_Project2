@@ -42,6 +42,13 @@ decide which one performed the best.
 ## Packages Used 
 We used the following packages to complete the project:
 - tidyverse for data cleaning and transforming with dplyr, and plotting with ggplot2.
+- reader for reading files.
+- corrplot for creating a detailed correlation plot of variables.
+- caret for training our models, we used caret to train all four of our models.
+- elasticnet a package that is necessary for the boosted tree model.
+- ggridges for creating a plot that has multiple density plots in "ridges".
+- gridExtra for structuring some tables.
+- doParallel for parallel processing, particularly when we get to the random forest model and boosted model since they are computationally expensive.
 
 ## Read In Data and Prepare It For EDA
 
